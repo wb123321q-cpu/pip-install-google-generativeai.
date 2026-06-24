@@ -1,1 +1,234 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Симулятор продаж: Премиальная оптика</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #e0e5ec 0%, #ffffff 100%);
+            color: #1d1d1f;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 650px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            height: 80vh;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-box {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            background: rgba(250, 250, 252, 0.6);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .message {
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+            line-height: 1.5;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            font-size: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .client { background-color: #ffffff; align-self: flex-start; color: #1d1d1f; border-bottom-left-radius: 4px; }
+        .doctor { background-color: #1a1a1a; color: #ffffff; align-self: flex-end; border-bottom-right-radius: 4px; }
+        .system { background-color: #f3f4f6; color: #4b5563; align-self: center; font-size: 13px; text-align: center; max-width: 90%; border-radius: 8px; }
+        .controls { display: flex; gap: 10px; }
+        input[type="text"] { flex: 1; padding: 14px; border: 1px solid rgba(0,0,0,0.1); border-radius: 10px; outline: none; font-size: 16px; background: rgba(255,255,255,0.9); transition: border-color 0.2s; }
+        input[type="text"]:focus { border-color: #1a1a1a; }
+        button { background-color: #1a1a1a; color: white; border: none; padding: 14px 24px; border-radius: 10px; cursor: pointer; font-size: 16px; font-weight: 500; transition: all 0.2s; }
+        button:hover:not(:disabled) { background-color: #333333; transform: translateY(-1px); }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; transform: none; }
+        .btn-end { background-color: #e74c3c; padding: 10px 16px; font-size: 14px; }
+        .btn-end:hover:not(:disabled) { background-color: #c0392b; }
+        .setup-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 24px; text-align: center; }
+        h2 { margin: 0; color: #1a1a1a; }
+    </style>
+</head>
+<body>
 
+<div class="container">
+    <div id="setup-screen" class="setup-screen">
+        <h2>Симулятор продаж МФ линз</h2>
+        <p style="color: #666;">Выберите пол клиента для генерации персонажа:</p>
+        <div style="display: flex; gap: 15px;">
+            <button onclick="startSimulation('Мужчина')">Мужчина</button>
+            <button onclick="startSimulation('Женщина')">Женщина</button>
+        </div>
+    </div>
+
+    <div id="sim-screen" style="display: none; flex-direction: column; height: 100%;">
+        <div class="header">
+            <h3 id="client-info" style="margin: 0;">Клиент</h3>
+            <button class="btn-end" id="end-btn" onclick="finishSimulation()">Завершить и оценить</button>
+        </div>
+        <div class="chat-box" id="chat-box"></div>
+        <div class="controls">
+            <input type="text" id="doctor-input" placeholder="Введите ваше сообщение..." onkeypress="if(event.key === 'Enter') sendMessage()">
+            <button id="send-btn" onclick="sendMessage()">Отправить</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ⚠️ ВСТАВЬТЕ ВАШ КЛЮЧ СЮДА (СТРОГО МЕЖДУ КАВЫЧЕК, БЕЗ ПРОБЕЛОВ):
+    const API_KEY = "AQ.Ab8RN6JYMYKLQNtS74nt3i1rYulgELZwHYC3cm64pmZIYqs2uA"; 
+
+    let chatHistory = [];
+    
+    // Инструкция для генерации реалистичного клиента
+    const SYSTEM_INSTRUCTION = "Ты — капризный клиент оптики (возраст 45-60 лет). У тебя начинается пресбиопия (плохо видишь вблизи). Ты пришел за обычными дешевыми очками. Отвечай коротко (1-2 предложения). Возражай на предложения дорогих мультифокальных линз (дорого, боюсь привыкать). Соглашайся на запись к мастеру, только если доктор подробно расспросил про твою работу, гаджеты и понятно объяснил ценность.";
+
+    function appendMessage(sender, text) {
+        const box = document.getElementById('chat-box');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `message ${sender}`;
+        msgDiv.innerText = text;
+        box.appendChild(msgDiv);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    function toggleUI(isProcessing) {
+        const sendBtn = document.getElementById('send-btn');
+        const input = document.getElementById('doctor-input');
+        const endBtn = document.getElementById('end-btn');
+        if(sendBtn) sendBtn.disabled = isProcessing;
+        if(input) input.disabled = isProcessing;
+        if(endBtn) endBtn.disabled = isProcessing;
+    }
+
+    async function startSimulation(gender) {
+        if (!API_KEY || API_KEY === "ВАШ_КЛЮЧ_ЗДЕСЬ") {
+            alert("Ошибка: Укажите ваш реальный API_KEY в коде страницы (строка 76)!");
+            return;
+        }
+        chatHistory = [];
+        document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('sim-screen').style.display = 'flex';
+        document.getElementById('client-info').innerText = `Клиент: ${gender}`;
+        
+        appendMessage('system', 'Идет генерация профиля клиента...');
+        
+        const startPrompt = `Привет. Начнем симуляцию. Ты клиент, твой пол: ${gender}. Придумай себе имя и профессию. Поздоровайся и озвучь первую короткую жалобу на то, что стал плохо видеть текст вблизи (например, в телефоне).`;
+        await processGeminiRequest(startPrompt, true);
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById('doctor-input');
+        const text = input.value.trim();
+        if (!text) return;
+        appendMessage('doctor', text);
+        input.value = '';
+        await processGeminiRequest(text, false);
+    }
+
+    async function processGeminiRequest(userText, isFirstMessage) {
+        toggleUI(true);
+        let requestHistory = [...chatHistory, { role: "user", parts: [{ text: userText }] }];
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
+        
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': API_KEY
+                },
+                body: JSON.stringify({
+                    contents: requestHistory,
+                    systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] }
+                })
+            });
+            
+            const data = await response.json();
+            if (!response.ok || data.error) {
+                throw new Error((data.error && data.error.message) || "Ошибка API Google");
+            }
+            
+            const aiText = data.candidates[0].content.parts[0].text;
+            if (isFirstMessage) {
+                document.getElementById('chat-box').innerHTML = '';
+            }
+            
+            appendMessage('client', aiText);
+            chatHistory.push({ role: "user", parts: [{ text: userText }] });
+            chatHistory.push({ role: "model", parts: [{ text: aiText }] });
+            
+        } catch (error) {
+            console.error(error);
+            appendMessage('system', `🚨 Техническая ошибка связи: ${error.message}.`);
+        } finally {
+            toggleUI(false);
+            if (!isFirstMessage) document.getElementById('doctor-input').focus();
+        }
+    }
+
+    async function finishSimulation() {
+        if (chatHistory.length === 0) return;
+        toggleUI(true);
+        appendMessage('system', 'Бизнес-тренер анализирует вашу работу...');
+        
+        let historyText = chatHistory.map(m => `${m.role === 'user' ? 'Доктор' : 'Клиент'}: ${m.parts[0].text}`).join('\n');
+        
+        // Строгий промпт для оценки с учетом правил вашей оптики
+        const evalPrompt = `Ты строгий бизнес-тренер по продажам премиальной оптики. Проанализируй этот диалог продавца с клиентом. 
+        КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА: 
+        1. В салоне НЕТ лицензии на проверку зрения. Если доктор в чате предложил клиенту проверить зрение — это грубейшая ошибка, укажи на нее и снизь балл.
+        2. Цель диалога — ЛИДОГЕНЕРАЦИЯ. Доктор должен пригласить клиента в салон на подбор очков, а не пытаться оформить заказ прямо в интернете.
+        
+        Выстави оценку от 1 до 10. Напиши сильные стороны, ошибки (не выявил потребности, не отработал возражения) и финальный итог сделки.
+        
+        Диалог:\n${historyText}`;
+        
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent`;
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': API_KEY
+                },
+                body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: evalPrompt }] }] })
+            });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+            appendMessage('system', `📊 РАЗБОР ПОЛЕТОВ:\n\n${data.candidates[0].content.parts[0].text}`);
+        } catch(error) {
+            appendMessage('system', 'Ошибка при генерации отчета бизнес-тренера.');
+        } finally {
+            toggleUI(false);
+        }
+    }
+</script>
+</body>
+</html>
