@@ -49,7 +49,7 @@
 </div>
 
 <script>
-    // ВСТАВЬТЕ СВОЙ ОБНОВЛЕННЫЙ КЛЮЧ СЮДА:
+    // ⚠️ ВСТАВЬТЕ ВАШ КЛЮЧ СЮДА ОДИН РАЗ (МЕЖДУ КАВЫЧЕК):
     const API_KEY = "AQ.Ab8RN6JYMYKLQNtS74nt3i1rYulgELZwHYC3cm64pmZIYqs2uA"; 
 
     let chatHistory = [];
@@ -75,7 +75,7 @@
 
     async function startSimulation(gender) {
         if (!API_KEY || API_KEY === "ВАШ_КЛЮЧ_ЗДЕСЬ") {
-            alert("Ошибка: Укажите ваш реальный API_KEY в коде страницы (строка 58)!");
+            alert("Ошибка: Укажите ваш реальный API_KEY в коде страницы (строка 61)!");
             return;
         }
         chatHistory = [];
@@ -101,8 +101,6 @@
     async function processGeminiRequest(userText, isFirstMessage) {
         toggleUI(true);
         let requestHistory = [...chatHistory, { role: "user", parts: [{ text: userText }] }];
-        
-        // Переносим ключ в заголовки Headers для безопасности и стабильности
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
         
         try {
@@ -110,7 +108,7 @@
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'x-goog-api-key': API_KEY // Передача ключа любого формата напрямую
+                    'x-goog-api-key': API_KEY
                 },
                 body: JSON.stringify({
                     contents: requestHistory,
@@ -134,7 +132,7 @@
             
         } catch (error) {
             console.error(error);
-            appendMessage('system', `🚨 Сбой авторизации: ${error.message}. Перепроверьте правильность вставки токена.`);
+            appendMessage('system', `🚨 Ошибка: ${error.message}. Перепроверьте правильность вставки токена.`);
         } finally {
             toggleUI(false);
             if (!isFirstMessage) document.getElementById('doctor-input').focus();
