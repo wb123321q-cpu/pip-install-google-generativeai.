@@ -49,15 +49,12 @@
 </div>
 
 <script>
-    // ⚠️ ВАШ КЛЮЧ ДОЛЖЕН БЫТЬ МЕЖДУ КАВЫЧЕК НИЖЕ:
-    const API_KEY = "AQ.Ab8RN6IzSGS8Z1vqnxkf8MDUPc_v5_ZekLt_wwRbTff7XihpTg"; 
+    // ВСТАВЬТЕ СВОЙ ОБНОВЛЕННЫЙ КЛЮЧ СЮДА:
+    const API_KEY = "AQ.Ab8RN6JYMYKLQNtS74nt3i1rYulgELZwHYC3cm64pmZIYqs2uA"; 
 
     let chatHistory = [];
-    
-    // Промпт для генерации клиента
-    const SYSTEM_INSTRUCTION = "Ты — капризный клиент оптики (возраст 45-60 лет). У тебя начинается пресбиопия (плохо видишь вблизи). Ты пришел за обычными дешевыми очками для чтения. Отвечай коротко (1-2 предложения). Активно возражай на предложения дорогих мультифокальных линз. Соглашайся на покупку линз только если доктор подробно расспросил про работу, гаджеты и понятно объяснил ценность.";
+    const SYSTEM_INSTRUCTION = "Ты — капризный клиент оптики (возраст 45-60 лет). У тебя начинается пресбиопия (плохо видишь вблизи). Ты пришел за обычными дешевыми очки для чтения. Отвечай коротко (1-2 предложения). Активно возражай на предложения дорогих мультифокальных линз. Соглашайся на покупку линз только если доктор подробно расспросил про твою работу, гаджеты и понятно объяснил ценность.";
 
-    // Функция безопасного добавления сообщений на экран
     function appendMessage(sender, text) {
         const box = document.getElementById('chat-box');
         const msgDiv = document.createElement('div');
@@ -67,33 +64,28 @@
         box.scrollTop = box.scrollHeight;
     }
 
-    // Блокировка интерфейса во время запроса
     function toggleUI(isProcessing) {
         const sendBtn = document.getElementById('send-btn');
         const input = document.getElementById('doctor-input');
         const endBtn = document.getElementById('end-btn');
-        
         if(sendBtn) sendBtn.disabled = isProcessing;
         if(input) input.disabled = isProcessing;
         if(endBtn) endBtn.disabled = isProcessing;
     }
 
     async function startSimulation(gender) {
-        if (!API_KEY || API_KEY === "AQ.Ab8RN6IzSGS8Z1vqnxkf8MDUPc_v5_ZekLt_wwRbTff7XihpTg") {
+        if (!API_KEY || API_KEY === "AQ.Ab8RN6JYMYKLQNtS74nt3i1rYulgELZwHYC3cm64pmZIYqs2uA") {
             alert("Ошибка: Укажите ваш реальный API_KEY в коде страницы (строка 58)!");
             return;
         }
-        
-        chatHistory = []; // Очищаем историю при новом старте
-        
+        chatHistory = [];
         document.getElementById('setup-screen').style.display = 'none';
         document.getElementById('sim-screen').style.display = 'flex';
         document.getElementById('client-info').innerText = `Клиент: ${gender}`;
         
-        appendMessage('system', 'Генерация клиента, ожидайте...');
+        appendMessage('system', 'Устанавливаю защищенное соединение с ИИ...');
         
         const startPrompt = `Привет. Начнем симуляцию. Ты клиент, твой пол: ${gender}. Придумай себе имя и возраст от 45 до 60 лет. Поздоровайся и озвучь первую короткую жалобу на то, что стал плохо видеть текст вблизи.`;
-        
         await processGeminiRequest(startPrompt, true);
     }
 
@@ -101,25 +93,25 @@
         const input = document.getElementById('doctor-input');
         const text = input.value.trim();
         if (!text) return;
-        
         appendMessage('doctor', text);
         input.value = '';
-        
         await processGeminiRequest(text, false);
     }
 
     async function processGeminiRequest(userText, isFirstMessage) {
         toggleUI(true);
-        
-        // Создаем временную историю для отправки, чтобы не сломать основную при ошибке
         let requestHistory = [...chatHistory, { role: "user", parts: [{ text: userText }] }];
         
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+        // Переносим ключ в заголовки Headers для безопасности и стабильности
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
         
         try {
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': API_KEY // Передача ключа любого формата напрямую
+                },
                 body: JSON.stringify({
                     contents: requestHistory,
                     systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] }
@@ -127,67 +119,50 @@
             });
             
             const data = await response.json();
-            
             if (!response.ok || data.error) {
-                throw new Error((data.error && data.error.message) || "Ошибка сервера Google");
+                throw new Error((data.error && data.error.message) || "Ошибка авторизации или лимитов API");
             }
             
             const aiText = data.candidates[0].content.parts[0].text;
-            
             if (isFirstMessage) {
-                document.getElementById('chat-box').innerHTML = ''; // Убираем текст загрузки
+                document.getElementById('chat-box').innerHTML = '';
             }
             
             appendMessage('client', aiText);
-            
-            // Если запрос успешен, официально сохраняем его в историю диалога
             chatHistory.push({ role: "user", parts: [{ text: userText }] });
             chatHistory.push({ role: "model", parts: [{ text: aiText }] });
             
         } catch (error) {
             console.error(error);
-            appendMessage('system', `🚨 Ошибка связи: ${error.message}`);
+            appendMessage('system', `🚨 Сбой авторизации: ${error.message}. Перепроверьте правильность вставки токена.`);
         } finally {
             toggleUI(false);
-            if (!isFirstMessage) {
-                document.getElementById('doctor-input').focus();
-            }
+            if (!isFirstMessage) document.getElementById('doctor-input').focus();
         }
     }
 
     async function finishSimulation() {
         if (chatHistory.length === 0) return;
-        
         toggleUI(true);
         appendMessage('system', 'Бизнес-тренер анализирует диалог...');
         
         let historyText = chatHistory.map(m => `${m.role === 'user' ? 'Доктор' : 'Клиент'}: ${m.parts[0].text}`).join('\n');
+        const evalPrompt = `Ты строгий бизнес-тренер по продажам. Оцени диалог оптометриста с клиентом. ВАЖНЫЕ ПРАВИЛА: 1. В оптике нет лицензии на проверку зрения. Если доктор предложил проверить зрение на месте — это ошибка. 2. Цель сайта — лидогенерация (пригласить на консультацию). Выстави оценку от 1 до 10, распиши сильные стороны, ошибки и итог сделки.\n\nДиалог:\n${historyText}`;
         
-        // Обновленный промпт тренера с учетом правил лидогенерации
-        const evalPrompt = `Ты строгий бизнес-тренер по продажам. Оцени диалог оптометриста с клиентом. 
-        ВАЖНЫЕ ПРАВИЛА: 
-        1. В оптике нет лицензии на проверку зрения. Если доктор предложил проверить зрение на месте — это грубая ошибка.
-        2. Цель сайта/бота — лидогенерация (пригласить на консультацию в салон), а не онлайн-оплата.
-        
-        Выстави оценку от 1 до 10. Напиши сильные стороны, укажи ошибки (выявлены ли потребности, отработаны ли возражения по цене МФ линз) и итог сделки.
-        
-        Диалог:\n${historyText}`;
-        
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${API_KEY}`;
-        
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent`;
         try {
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': API_KEY
+                },
                 body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: evalPrompt }] }] })
             });
             const data = await response.json();
-            
             if (data.error) throw new Error(data.error.message);
-            
-            appendMessage('system', `📊 ОТЧЕТ:\n\n${data.candidates[0].content.parts[0].text}`);
+            appendMessage('system', `📊 ОТЧЕТ БИЗНЕС-ТРЕНЕРА:\n\n${data.candidates[0].content.parts[0].text}`);
         } catch(error) {
-            console.error(error);
             appendMessage('system', 'Ошибка при составлении отчета.');
         } finally {
             toggleUI(false);
