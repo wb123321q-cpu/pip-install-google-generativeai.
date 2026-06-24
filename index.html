@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Симулятор продаж МФ линз</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 85vh;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 1px solid #e5e5e7;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+        .chat-box {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #e5e5e7;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            background: #fafafa;
+        }
+        .message {
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            max-width: 80%;
+            line-height: 1.4;
+        }
+        .client {
+            background-color: #e9e9eb;
+            align-self: flex-start;
+            margin-right: auto;
+        }
+        .doctor {
+            background-color: #0071e3;
+            color: white;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #d2d2d7;
+            border-radius: 8px;
+            outline: none;
+            font-size: 16px;
+        }
+        button {
+            background-color: #0071e3;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        button:hover { background-color: #0077ed; }
+        .btn-end { background-color: #ff3b30; }
+        .btn-end:hover { background-color: #ff453a; }
+        .setup-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- ЭКРАН СТАРТА -->
+    <div id="setup-screen" class="setup-screen">
+        <h2>Симулятор продаж МФ линз</h2>
+        <p>Выберите пол клиента для начала симуляции:</p>
+        <div style="display: flex; gap: 15px;">
+            <button onclick="startSimulation('Мужчина')">Мужчина</button>
+            <button onclick="startSimulation('Женщина')">Женщина</button>
+        </div>
+    </div>
+
+    <!-- ЭКРАН СИМУЛЯТОРА (СКРЫТ ПО УМОЛЧАНИЮ) -->
+    <div id="sim-screen" style="display: none; flex-direction: column; height: 100%;">
+        <div class="header">
+            <h3 id="client-info">Клиент генерируется...</h3>
+            <button class="btn-end" onclick="finishSimulation()" style="padding: 6px 12px; font-size: 12px;">Завершить и оценить</button>
+        </div>
+        
+        <div class="chat-box" id="chat-box">
+            <!-- Тут будут появляться сообщения -->
+        </div>
+
+        <div class="controls">
+            <input type="text" id="doctor-input" placeholder="Введите ваш вопрос клиенту..." onkeypress="if(event.key === 'Enter') sendMessage()">
+            <button onclick="sendMessage()">Отправить</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Переменные для хранения состояния
+    const API_KEY = "AQ.Ab8RN6IzSGS8Z1vqnxkf8MDUPc_v5_ZekLt_wwRbTff7XihpTg"; // Вставьте сюда ваш ключ AIzaSy...
+    let chatHistory = [];
+    let clientGender = '';
+
+    const CLIENT_PROMPT = `Ты — капризный клиент оптики (возраст 45-60 лет). У тебя пресбиопия, но ты не знаешь этого слова. Тебе тяжело читать сообщения в телефоне, устают глаза. Ты пришел за дешевыми очками для чтения. Короткие ответы (1-3 предложения). Возражай на дорогие линзы. Соглашайся, только если доктор спросил про работу/дистанции и объяснил плавный фокус.`;
+
+    async function startSimulation(gender) {
+        clientGender = gender;
+        document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('sim-screen').style.display = 'flex';
+        
+        document.getElementById('client-info').innerText = `Клиент: ${gender}`;
+        
+        // Первая реплика ИИ
+        appendMessage('client', 'Генерация клиента...');
+        
+        const firstPrompt = `Начни симуляцию. Ты клиент пол: ${gender}. Поздоровайся и озвучь первую базовую жалобу на зрение.`;
+        await callGemini(firstPrompt);
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById('doctor-input');
+        const text = input.value.trim();
+        if(!text) return;
+
+        appendMessage('doctor', text);
+        input.value = '';
+
+        await callGemini(text);
+    }
+
+    async function callGemini(userText) {
+        // Добавляем сообщение пользователя в локальную историю
+        chatHistory.push({ role: "user", parts: [{ text: userText }] });
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+        
+        const payload = {
+            contents: chatHistory,
+            systemInstruction: { parts: [{ text: CLIENT_PROMPT }] }
+        };
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            const aiText = data.candidates[0].content.parts[0].text;
+            
+            // Удаляем временное сообщение о загрузке, если оно было
+            const boxes = document.getElementById('chat-box');
+            if(boxes.lastChild && boxes.lastChild.innerText === 'Генерация клиента...') {
+                boxes.removeChild(boxes.lastChild);
+            }
+
+            appendMessage('client', aiText);
+            // Сохраняем ответ ИИ в историю
+            chatHistory.push({ role: "model", parts: [{ text: aiText }] });
+        } catch (e) {
+            appendMessage('client', 'Ошибка связи с ИИ. Проверьте API ключ.');
+            console.error(e);
+        }
+    }
+
+    function appendMessage(sender, text) {
+        const box = document.getElementById('chat-box');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `message ${sender}`;
+        msgDiv.innerText = text;
+        box.appendChild(msgDiv);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    async function finishSimulation() {
+        appendMessage('client', 'Эксперт оценивает ваш диалог, подождите...');
+        
+        // Формируем историю для оценщика
+        let historyText = chatHistory.map(m => `${m.role === 'user' ? 'Доктор' : 'Клиент'}: ${m.parts[0].text}`).join('\n');
+        
+        const evalPrompt = `Ты бизнес-тренер по продажам оптики. Оцени этот диалог от 1 до 10. Напиши удачные моменты и ошибки доктора при продаже мультифокальных линз:\n\n${historyText}`;
+        
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${API_KEY}`;
+        
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: evalPrompt }] }] })
+            });
+            const data = await response.json();
+            const evalResult = data.candidates[0].content.parts[0].text;
+            
+            alert("Анализ завершен! Результат выведен в окно чата.");
+            appendMessage('client', `📊 ОТЧЕТ ТРЕНЕРА:\n\n${evalResult}`);
+            
+            // ТОЧКА ОТПРАВКИ В ТЕЛЕГРАМ:
+            // Здесь добавим fetch запрос к вашему Telegram боту
+            
+        </div> catch(e) {
+            alert("Ошибка при создании отчета.");
+        }
+    }
+</script>
+</body>
+</html>
